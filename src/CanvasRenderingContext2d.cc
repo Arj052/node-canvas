@@ -146,7 +146,6 @@ Context2d::Initialize(Napi::Env& env, Napi::Object& exports) {
     InstanceAccessor<&Context2d::GetShadowOffsetY, &Context2d::SetShadowOffsetY>("shadowOffsetY", napi_default_jsproperty),
     InstanceAccessor<&Context2d::GetShadowBlur, &Context2d::SetShadowBlur>("shadowBlur", napi_default_jsproperty),
     InstanceAccessor<&Context2d::GetAntiAlias, &Context2d::SetAntiAlias>("antialias", napi_default_jsproperty),
-    InstanceAccessor<&Context2d::GetTextDrawingMode, &Context2d::SetTextDrawingMode>("textDrawingMode", napi_default_jsproperty),
     InstanceAccessor<&Context2d::GetQuality, &Context2d::SetQuality>("quality", napi_default_jsproperty),
     InstanceAccessor<&Context2d::GetCurrentTransform, &Context2d::SetCurrentTransform>("currentTransform", napi_default_jsproperty),
     InstanceAccessor<&Context2d::GetFillStyle, &Context2d::SetFillStyle>("fillStyle", napi_default_jsproperty),
@@ -1732,40 +1731,6 @@ Context2d::SetAntiAlias(const Napi::CallbackInfo& info, const Napi::Value& value
 }
 
 /*
- * Get text drawing mode.
- */
-
-Napi::Value
-Context2d::GetTextDrawingMode(const Napi::CallbackInfo& info) {
-  const char *mode;
-  if (state->textDrawingMode == TEXT_DRAW_PATHS) {
-    mode = "path";
-  } else if (state->textDrawingMode == TEXT_DRAW_GLYPHS) {
-    mode = "glyph";
-  } else {
-    mode = "unknown";
-  }
-  return Napi::String::New(env, mode);
-}
-
-/*
- * Set text drawing mode.
- */
-
-void
-Context2d::SetTextDrawingMode(const Napi::CallbackInfo& info, const Napi::Value& value) {
-  Napi::String stringValue;
-  if (value.ToString().UnwrapTo(&stringValue)) {
-    std::string str = stringValue.Utf8Value();
-    if (str == "path") {
-      state->textDrawingMode = TEXT_DRAW_PATHS;
-    } else if (str == "glyph") {
-      state->textDrawingMode = TEXT_DRAW_GLYPHS;
-    }
-  }
-}
-
-/*
  * Get filter.
  */
 
@@ -2487,15 +2452,9 @@ Context2d::paintText(const Napi::CallbackInfo& info, bool stroke) {
         crGlyphIndex += 1;
       }
 
-      savePath();
-      if (state->textDrawingMode == TEXT_DRAW_GLYPHS) {
-        if (stroke) { this->stroke(); } else { this->fill(); }
-        setTextPath(glyphs, crGlyphIndex);
-      } else if (state->textDrawingMode == TEXT_DRAW_PATHS) {
-        setTextPath(glyphs, crGlyphIndex);
-        if (stroke) { this->stroke(); } else { this->fill(); }
-      }
-      restorePath();
+      stroke ? this->stroke() : this->fill();
+      // TODO: use cairo_show_text_glyphs !
+      cairo_show_glyphs(context(), glyphs, crGlyphIndex);
     }
 
     cairo_set_font_face(context(), nullptr);
@@ -2523,16 +2482,6 @@ Context2d::FillText(const Napi::CallbackInfo& info) {
 void
 Context2d::StrokeText(const Napi::CallbackInfo& info) {
   paintText(info, true);
-}
-
-void
-Context2d::setTextPath(cairo_glyph_t* glyphs, size_t numGlyphs) {
-  if (state->textDrawingMode == TEXT_DRAW_GLYPHS) {
-    // TODO: use cairo_show_text_glyphs !
-    cairo_show_glyphs(context(), glyphs, numGlyphs);
-  } else {
-    cairo_glyph_path(context(), glyphs, numGlyphs);
-  }
 }
 
 /*
